@@ -14,6 +14,9 @@ from app.main_api_utils import get_final_cost
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.schemas import AnyModelParams
+from app.settings import settings
+
+MODELS_WITH_DURATION_COST = settings.MODELS_WITH_DURATION_COST
 
 
 class GenerationService:
