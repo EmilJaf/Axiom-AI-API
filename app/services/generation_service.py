@@ -15,8 +15,6 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.schemas import AnyModelParams
 
-MODELS_WITH_DURATION_COST = {"video-model"}
-
 
 class GenerationService:
 
