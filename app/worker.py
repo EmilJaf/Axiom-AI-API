@@ -41,8 +41,8 @@ MODEL_PROCESSORS = {
 
     'image-model': example_provider.generate_image,
     'video-model': example_provider.generate_video,
-    'random-model-1': example_provider.generate,
-    'random-model-2': example_provider.generate
+    'random-model-one': example_provider.generate,
+    'random-model-two': example_provider.generate
 }
 
 

@@ -21,12 +21,12 @@ class ImageModelParams(BaseModel):
 
 
 class RandomModelOneParams(BaseModel):
-    model_name: Literal["random-model"]
+    model_name: Literal["random-model-one"]
     prompt: str = Field(..., description="Main prompt for generation")
 
 
 class RandomModelTwoParams(BaseModel):
-    model_name: Literal["random-model"]
+    model_name: Literal["random-model-two"]
     prompt: str = Field(..., description="Main prompt for generation")
 
 
