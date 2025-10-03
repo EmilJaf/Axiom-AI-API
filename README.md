@@ -1,88 +1,99 @@
 # Axiom AI Gateway
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/emiljaf12345/Axiom-AI-API/ci.yml?branch=main)](https://github.com/emiljaf12345/Axiom-AI-API/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/your-repo/ci.yml?branch=main)](https://github.com/your-username/your-repo/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-311/)
 
-> Высокопроизводительный асинхронный шлюз для унифицированного доступа к десяткам AI-моделей с встроенной системой биллинга, мониторинга и управления.
+> A high-performance, asynchronous API gateway designed to provide unified access to dozens of AI models, featuring a built-in billing, monitoring, and management system.
 
 ## 🚀 About The Project
 
-**Axiom AI Gateway** — это полноценная production-ready система, разработанная для решения проблемы фрагментации AI-сервисов. Она предоставляет единую точку входа (API) для взаимодействия с более чем 20 различными AI-моделями (OpenAI, Gemini и др.), абстрагируя сложность интеграции и предоставляя мощные инструменты для управления.
+**Axiom AI Gateway** is a production-ready system built to solve the problem of AI service fragmentation. It provides a single, unified API endpoint for interacting with over 20 different AI models (OpenAI, Gemini, etc.), abstracting away the complexity of integration and providing powerful management tools.
 
-Этот проект демонстрирует построение сложной, асинхронной, распределенной системы, способной выдерживать реальные нагрузки (~30,000 запросов в сутки).
+This project demonstrates the construction of a complex, asynchronous, and distributed system capable of handling real-world production loads (tested with **30,000+ requests per day**).
 
 ## ✨ Key Features
 
-* **Унифицированный API:** Единый интерфейс для десятков AI-моделей.
-* **Асинхронная обработка задач:** Неблокирующая архитектура с использованием воркеров для выполнения долгих задач.
-* **Гибкая система биллинга:** Встроенный учет баланса, кастомные цены и коэффициенты для пользователей.
-* **Управление API-ключами:** Безопасная система аутентификации.
-* **Гибридное хранилище:** Использование SQL (MySQL) и NoSQL (MongoDB) для оптимального хранения данных.
-* **Административная панель:** Full-stack интерфейс на Vue.js для полного управления системой.
-* **Готовность к развертыванию:** Полная контейнеризация с помощью Docker.
+* **Unified API:** A single, consistent interface for dozens of AI models.
+* **Reliable Asynchronous Task Processing:** A non-blocking architecture using RabbitMQ and dedicated workers for handling long-running generation tasks.
+* **Flexible Billing System:** Built-in balance tracking, custom pricing, and user-specific coefficients.
+* **Secure API Key Management:** A robust authentication system.
+* **Hybrid Data Storage:** Utilizes both SQL (MySQL) and NoSQL (MongoDB) for optimal data storage and performance.
+* **Full-stack Admin Panel:** A comprehensive administrative interface built with Vue.js.
+* **Production Ready:** Fully containerized with Docker and Docker Compose for easy and reproducible deployments.
 
 ## 🏗️ Architecture
 
-Проект построен на основе микросервисной архитектуры, где API-сервер и обработчики задач (воркеры) разделены для независимого масштабирования.
+The project is built on a microservice-oriented architecture, where the API server (Producer) and task processors (Consumers/Workers) are decoupled for independent scaling and enhanced reliability.
 
 ```
-                  +------------------------+
-Клиенты (Боты) -> |   API Gateway (FastAPI) | 
-                  +------------------------+
-                         |
-                         | (Запись метаданных)
-                         v
-                  +-----------------+      +-----------------------+
-                  |  SQL DB (Users, |      |  Worker(s)            | -> Внешние AI API
-                  |  Keys, Billing) |      | (Asyncio, AIOHTTP)    |
-                  +-----------------+      +-----------------------+
-                                                     |
-                                                     | (Запись/Чтение задач)
-                                                     v
-                                              +-----------------+
-                                              | NoSQL DB (Tasks)|
-                                              +-----------------+
+                               +---------------------------+
+Clients (Bots, Apps) ---->     |   API Gateway (FastAPI)   | ---(Publish Task)---> [ Message Broker (RabbitMQ) ]
+                               +---------------------------+                           ^
+                                      |                                                |
+                                      | (User/Billing Data Read/Write)                 | (Consume Task)
+                                      v                                                |
++--------------------------------------------------------------------------------------+-----------------+
+|                                                                                      |                 |
+|                               +-----------------+                                    |                 |
++-----------------------------> |  SQL DB (MySQL) |                                    |                 v
+                                | (Users, Keys,   |                                    |      +--------------------+
+                                |   Billing)      | <----------------------------------+----> | Worker(s) (Asyncio)  | ----> External AI APIs
+                                +-----------------+                                          +--------------------+
+                                                                                                      |
+                                                                                                      | (Task Status/Result Read/Write)
+                                                                                                      v
+                                                                                                +----------------+
+                                                                                                | NoSQL DB       |
+                                                                                                | (MongoDB)      |
+                                                                                                | (Task Storage) |
+                                                                                                +----------------+
 ```
 
 ## 🛠️ Tech Stack
 
-* **Backend:** Python 3.11, FastAPI, SQLAlchemy, Pydantic, AIOHTTP
+![Tech Stack](https://skillicons.dev/icons?i=python,fastapi,vue,docker,mysql,mongodb,rabbitmq,redis,git,githubactions,nginx)
+
+* **Backend:** Python 3.11, FastAPI, SQLAlchemy, Pydantic, AIOHTTP, aio-pika
 * **Frontend:** Vue.js
-* **Databases:**  MySQL, MongoDB
-* **DevOps:** Docker, Docker Compose, GitHub Actions (CI/CD)
+* **Databases:** MySQL, MongoDB, Redis
+* **Message Broker:** RabbitMQ
+* **DevOps:** Docker, Docker Compose, GitHub Actions (CI)
 * **Testing:** Pytest
 
 ## ⚙️ Getting Started
 
-Чтобы запустить проект локально, вам понадобится Docker
+To run this project locally, you will need Docker and Docker Compose installed.
 
-### 1. Клонируйте репозиторий
+### 1. Clone the repository
 ```bash
-git clone https://github.com/emiljaf12345/Axiom-AI-API.git
-cd Axiom-AI-API
+git clone [https://github.com/your-username/your-repo.git](https://github.com/your-username/your-repo.git)
+cd your-repo
 ```
 
-### 2. Настройте переменные окружения
-Скопируйте файл с примерами переменных окружения и заполните его необходимыми значениями.
+### 2. Configure Environment Variables
+Copy the example environment file and fill in the required values.
 ```bash
 cp .env.example .env
 ```
-> 🔑 **Важно:** Заполните `.env` файл вашими тестовыми ключами и настройками.
+> 🔑 **Important:** Fill the `.env` file with your test keys and configuration details.
 
-### 3. Запустите проект
-Эта команда соберет все образы и запустит все сервисы, включая базы данных.
+### 3. Launch the Project
+This single command will build the Docker images and start all the services, including the databases and message broker.
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
-
-После успешного запуска, API будет доступно по адресу `http://localhost:8000`.
+After a successful launch, the API will be available at `http://localhost:8000`.
 
 ## 📚 API Documentation
 
-Интерактивная документация API (Swagger UI) автоматически генерируется и доступна по адресу:
-[**http://localhost:8000/docs/elements**](http://localhost:8000/docs/elements)
+Interactive API documentation (Swagger UI and ReDoc) is automatically generated and available at:
+* [**http://localhost:8000/docs**](http://localhost:8000/docs) (Swagger UI)
+* [**http://localhost:8000/redoc**](http://localhost:8000/redoc) (ReDoc)
+
+Also, a more user-friendly documentation view is available at:
+* [**http://localhost:8000/docs/elements**](http://localhost:8000/docs/elements)
 
 ## 📄 License
 
-Этот проект распространяется под лицензией MIT. Подробности смотрите в файле `LICENSE`.
+This project is distributed under the MIT License. See the `LICENSE` file for more information.
