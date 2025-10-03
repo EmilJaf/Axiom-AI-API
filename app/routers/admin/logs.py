@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app import dependencies
-from app.database.log_repository import AdminLogRepository
+from app.database.repositories.log_repository import AdminLogRepository
 
 
 router = APIRouter(

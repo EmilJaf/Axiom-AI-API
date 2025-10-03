@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app import dependencies
-from app.database.log_repository import AdminLogRepository
+from app.database.repositories.log_repository import AdminLogRepository
 from app.database.main_models import AdminLog, Price
-from app.database.price_repository import PriceRepository
+from app.database.repositories.price_repository import PriceRepository
 
 router = APIRouter(
     prefix="/prices",

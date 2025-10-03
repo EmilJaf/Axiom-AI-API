@@ -23,4 +23,6 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: List[str] = Field(default_factory=lambda: ['*'])
 
+    RABBITMQ_URL: str
+
 settings = Settings()

@@ -1,8 +1,11 @@
+import json
+
 from aiobotocore.session import get_session
 from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
 from typing import Tuple
 
+import aio_pika
 from motor.motor_asyncio import AsyncIOMotorCollection
 from starlette import status
 from starlette.middleware.cors import CORSMiddleware
@@ -14,7 +17,7 @@ from app.database.repositories.user_price_repository import UserPriceRepository
 from app.database.repositories.user_repository import UserRepository, ApiKeyRepository
 from app.database.engine import engine
 from app.database.mongo_db import get_task_collection
-from app.database.price_repository import PriceRepository
+from app.database.repositories.price_repository import PriceRepository
 from app import schemas
 from app import dependencies
 from app.documentation import API_DESCRIPTION
@@ -23,6 +26,7 @@ from app.routers.admin.users import UserCreate, UserBase, UserWithKeys
 from app.schemas import TaskStatusResponse
 from app.services.generation_service import GenerationService
 from app.settings import settings
+
 
 AUTH_DEPENDENCY = Depends(dependencies.get_current_user_and_key)
 
@@ -38,7 +42,21 @@ async def lifespan(app: FastAPI):
     async with session.create_client('s3', region_name=AWS_REGION) as s3_client:
 
         app.state.s3_client = s3_client
-        yield
+
+        try:
+            connection = await aio_pika.connect_robust(settings.RABBITMQ_URL)
+            channel = await connection.channel()
+
+            app.state.rabbitmq_channel = channel
+            app.state.rabbitmq_connection = connection
+            print("Successfully connected to RabbitMQ")
+
+            yield
+
+        finally:
+            if connection:
+                await connection.close()
+                print("RabbitMQ connection closed")
 
 app = FastAPI(
     title=settings.APP_TITLE,
@@ -125,11 +143,9 @@ async def get_task_status(
           tags=["Core Logic"])
 async def generate(
         request_data: schemas.GenerateRequest,
-
         auth_data: Tuple[User, ApiKey] = AUTH_DEPENDENCY,
         key_repo: ApiKeyRepository = Depends(dependencies.get_key_repository),
         price_repo: PriceRepository = Depends(dependencies.get_price_repository),
-        tasks_collection: AsyncIOMotorCollection = Depends(get_task_collection),
         user_price_repo: UserPriceRepository = Depends(dependencies.get_user_price_repository)
 ):
 
@@ -141,10 +157,33 @@ async def generate(
         key_repo=key_repo,
         price_repo=price_repo,
         user_price_repo=user_price_repo,
-        tasks_collection=tasks_collection
     )
 
-    task_id = await service.create_generation_task(request_data.params)
+    task_id, task_message_body = await service.prepare_generation_task(request_data.params)
+
+    channel: aio_pika.Channel = app.state.rabbitmq_channel
+
+    routing_key = 'general_tasks_queue'
+
+
+    dlx_name = f"{routing_key}.dlx"
+    queue_arguments = {
+        "x-dead-letter-exchange": dlx_name
+    }
+
+    await channel.declare_queue(
+        routing_key,
+        durable=True,
+        arguments=queue_arguments
+    )
+
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=json.dumps(task_message_body, default=str).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+        ),
+        routing_key=routing_key
+    )
 
     return schemas.GenerateAcceptedResponse(task_id=task_id)
 

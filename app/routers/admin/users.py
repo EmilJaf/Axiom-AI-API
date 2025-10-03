@@ -10,7 +10,7 @@ from starlette import status
 from starlette.responses import Response
 
 from app import schemas, dependencies
-from app.database.log_repository import AdminLogRepository
+from app.database.repositories.log_repository import AdminLogRepository
 from app.database.main_models import User, AdminLog
 from app.database.mongo_db import get_task_collection
 from app.database.repositories.user_price_repository import UserPriceRepository

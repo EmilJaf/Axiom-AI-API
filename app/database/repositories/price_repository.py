@@ -37,11 +37,3 @@ class PriceRepository:
                 await session.commit()
                 await session.refresh(price)
             return price
-
-    async def get_all_active(self) -> list[Price]:
-        """Возвращает список только активных моделей."""
-        async with self.session_factory() as session:
-            result = await session.execute(
-                select(Price).where(Price.is_active == True)
-            )
-            return result.scalars().all()

@@ -2,8 +2,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from typing import Tuple
 
-from app.database.log_repository import AdminLogRepository
-from app.database.price_repository import PriceRepository
+from app.database.repositories.log_repository import AdminLogRepository
+from app.database.repositories.price_repository import PriceRepository
 from app.database.engine import async_session_factory
 
 

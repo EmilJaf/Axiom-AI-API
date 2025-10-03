@@ -30,3 +30,7 @@ selenium
 opencv-python-headless
 numpy
 python-dotenv
+cryptography
+aio-pika
+pytest-mock
+pytest-asyncio
