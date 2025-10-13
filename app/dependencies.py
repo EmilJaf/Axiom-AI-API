@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from typing import Tuple
 
+from app.database.repositories.analytics_repository import AnalyticsRepository
 from app.database.repositories.log_repository import AdminLogRepository
 from app.database.repositories.price_repository import PriceRepository
 from app.database.engine import async_session_factory
@@ -66,6 +67,9 @@ def get_log_repository() -> AdminLogRepository:
 
 def get_tasks_database():
     return mongo_database_instance
+
+def get_analytics_repository() -> AnalyticsRepository:
+    return AnalyticsRepository(async_session_factory)
 
 
 def get_user_price_repository() -> UserPriceRepository:

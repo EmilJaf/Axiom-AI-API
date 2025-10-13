@@ -1,6 +1,6 @@
 import re
-from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Literal
+from datetime import datetime, timezone
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -9,6 +9,7 @@ from starlette import status
 from starlette.responses import Response
 
 from app import dependencies
+from app.database.repositories.analytics_repository import AnalyticsRepository
 from app.database.repositories.log_repository import AdminLogRepository
 from app.database.main_models import AdminLog
 from app.database.mongo_db import get_task_collection
@@ -18,6 +19,7 @@ router = APIRouter(
     prefix="/keys",
     tags=["Admin - API Keys"]
 )
+
 
 
 class ApiKeyInfo(BaseModel):
@@ -79,7 +81,6 @@ class KeyAnalyticsResponse(BaseModel):
     total_tasks_completed: int
     total_tasks_failed: int
     model_usage: List[ModelUsageStatKeys]
-    daily_activity: List[Dict[str, Any]]
 
 
 
@@ -181,6 +182,7 @@ async def top_up_key_balance(
 async def get_key_analytics(
         key_id: int,
         key_repo: ApiKeyRepository = Depends(dependencies.get_key_repository),
+        analytics_repo: AnalyticsRepository = Depends(dependencies.get_analytics_repository),
         tasks_collection: AsyncIOMotorCollection = Depends(get_task_collection),
 ):
 
@@ -189,60 +191,39 @@ async def get_key_analytics(
         raise HTTPException(status_code=404, detail="API Key not found")
 
 
-    match_query = {"api_key_id": key_id}
+    key_summary = await analytics_repo.get_key_summary(api_key_id=key_id)
 
 
-    completed_tasks = await tasks_collection.count_documents({**match_query, "status": "completed"})
-    failed_tasks = await tasks_collection.count_documents({**match_query, "status": "failed"})
+    failed_tasks = await tasks_collection.count_documents({
+        "api_key_id": key_id,
+        "status": "failed"
+    })
 
-
-    spending_pipeline = [
-        {"$match": {**match_query, "status": "completed"}},
-        {"$group": {"_id": None, "total": {"$sum": "$cost"}}}
+    model_usage_data = [
+        ModelUsageStatKeys(model=row.model, count=int(row.count))
+        for row in key_summary["model_usage"]
     ]
-    spending_result = await tasks_collection.aggregate(spending_pipeline).to_list(length=1)
-    total_spending = spending_result[0]['total'] if spending_result else 0.0
 
-
-    model_usage_pipeline = [
-        {"$match": {**match_query, "status": "completed"}},
-        {"$group": {"_id": "$model", "count": {"$sum": 1}}},
-        {"$project": {"model": "$_id", "count": "$count", "_id": 0}}
-    ]
-    model_usage = await tasks_collection.aggregate(model_usage_pipeline).to_list(length=None)
-
-
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-    daily_activity_pipeline = [
-        {"$match": {**match_query, "created_at": {"$gte": thirty_days_ago}}},
-        {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}}, "count": {"$sum": 1}}},
-        {"$project": {"date": "$_id", "count": "$count", "_id": 0}},
-        {"$sort": {"date": 1}}
-    ]
-    daily_activity = await tasks_collection.aggregate(daily_activity_pipeline).to_list(length=None)
 
     return KeyAnalyticsResponse(
         key_id=api_key.id,
         key_value_partial=f"{api_key.key_value[:4]}...{api_key.key_value[-4:]}",
         owner_id=api_key.owner_id,
         balance=float(api_key.balance),
-        total_spending=float(total_spending),
-        total_tasks_completed=completed_tasks,
+        total_spending=key_summary["total_spending"],
+        total_tasks_completed=key_summary["total_tasks_completed"],
         total_tasks_failed=failed_tasks,
-        model_usage=model_usage,
-        daily_activity=daily_activity
+        model_usage=model_usage_data
     )
-
 
 
 @router.get("/{key_id}/history", response_model=KeyHistoryResponse)
 async def get_key_transaction_history(
         key_id: int,
         key_repo: ApiKeyRepository = Depends(dependencies.get_key_repository),
-        tasks_collection: AsyncIOMotorCollection = Depends(get_task_collection),
+        analytics_repo: AnalyticsRepository = Depends(dependencies.get_analytics_repository),
         log_repo: AdminLogRepository = Depends(dependencies.get_log_repository)
 ):
-
     key = await key_repo.get_by_id(key_id)
     if not key:
         raise HTTPException(status_code=404, detail="Key not found")
@@ -250,39 +231,30 @@ async def get_key_transaction_history(
     transactions = []
 
 
-    debit_tasks_cursor = tasks_collection.find(
-        {"api_key_id": key_id, "status": "completed"}
-    )
-    async for task in debit_tasks_cursor:
-        task_timestamp = task.get('created_at', datetime.now(timezone.utc))
-
+    debit_tasks = await analytics_repo.get_debit_transactions_for_key(api_key_id=key_id)
+    for task in debit_tasks:
         transactions.append(Transaction(
-            timestamp=task_timestamp,
+            timestamp=task.created_at,
             type='debit',
-            amount=-abs(task.get('cost', 0)),
-            description=f"Списание за задачу {str(task['_id'])} ({task.get('model')})"
+            amount=-abs(task.cost),
+            description=f"Списание за задачу {task.task_mongo_id} ({task.model_name})"
         ))
 
     logs = await log_repo.get_all_by_action_text(f"Maked refund for task")
     for log in logs:
 
         amount_match = re.search(r"Amount: ([\d\.]+)", log.action)
-
-
-        if amount_match:
+        key_id_match = re.search(r"Key ID: (\d+)", log.action)
+        if amount_match and key_id_match and int(key_id_match.group(1)) == key_id:
             cleaned_amount_str = amount_match.group(1).rstrip('.')
             amount = float(cleaned_amount_str)
-
             aware_timestamp = log.timestamp.replace(tzinfo=timezone.utc)
             transactions.append(Transaction(
-                timestamp=aware_timestamp,
-                type='refund',
-                amount=amount,
-                description=log.action
+                timestamp=aware_timestamp, type='refund', amount=amount, description=log.action
             ))
 
 
-    transactions.sort(key=lambda x: x.timestamp.replace(tzinfo=timezone.utc), reverse=True)
+    transactions.sort(key=lambda x: x.timestamp, reverse=True)
 
     return KeyHistoryResponse(
         key_id=key.id,

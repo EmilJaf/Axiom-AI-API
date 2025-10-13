@@ -10,6 +10,7 @@ from starlette import status
 from starlette.responses import Response
 
 from app import schemas, dependencies
+from app.database.repositories.analytics_repository import AnalyticsRepository
 from app.database.repositories.log_repository import AdminLogRepository
 from app.database.main_models import User, AdminLog
 from app.database.mongo_db import get_task_collection
@@ -135,9 +136,11 @@ async def get_any_user_keys(
 @router.get("/{telegram_id}/profile", response_model=UserProfileResponse)
 async def get_user_profile(
         telegram_id: int,
-        tasks_collection: AsyncIOMotorCollection = Depends(get_task_collection),
         user_repo: UserRepository = Depends(dependencies.get_user_repository),
-        user_price_repo: UserPriceRepository = Depends(dependencies.get_user_price_repository)
+        user_price_repo: UserPriceRepository = Depends(dependencies.get_user_price_repository),
+        tasks_collection: AsyncIOMotorCollection = Depends(get_task_collection),  # Оставляем для failed_tasks
+
+        analytics_repo: AnalyticsRepository = Depends(dependencies.get_analytics_repository)
 ):
 
     user_with_keys = await user_repo.get_with_keys(telegram_id=telegram_id)
@@ -146,63 +149,13 @@ async def get_user_profile(
     custom_prices = await user_price_repo.get_all_for_user(telegram_id)
 
 
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-
-    pipeline = [
-
-        {"$match": {"user_telegram_id": telegram_id}},
+    user_summary = await analytics_repo.get_user_summary(telegram_id)
 
 
-        {"$facet": {
-
-            "total_tasks": [
-                {"$count": "count"}
-            ],
-
-            "failed_tasks": [
-                {"$match": {"status": "failed"}},
-                {"$count": "count"}
-            ],
-
-            "completed_stats": [
-                {"$match": {"status": "completed"}},
-                {"$group": {
-                    "_id": "$model",
-                    "count": {"$sum": 1},
-                    "total_cost": {"$sum": "$cost"}
-                }}
-            ],
-
-            "daily_activity": [
-                {"$match": {"created_at": {"$gte": thirty_days_ago}}},
-                {"$group": {
-                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
-                    "count": {"$sum": 1}
-                }},
-                {"$project": {"date": "$_id", "count": "$count", "_id": 0}},
-                {"$sort": {"date": 1}}
-            ]
-        }}
-    ]
-
-
-    aggregation_result = await tasks_collection.aggregate(pipeline).to_list(length=1)
-
-
-    data = aggregation_result[0] if aggregation_result else {}
-
-    total_tasks_data = data.get("total_tasks", [])
-    total_tasks = total_tasks_data[0]['count'] if total_tasks_data else 0
-
-    failed_tasks_data = data.get("failed_tasks", [])
-    failed_tasks = failed_tasks_data[0]['count'] if failed_tasks_data else 0
-
-    completed_stats = data.get("completed_stats", [])
-    total_spending = sum(item.get('total_cost', 0) for item in completed_stats)
-
-    model_usage = [schemas.UserStatItem(model=item["_id"], count=item["count"]) for item in completed_stats]
-
-    daily_activity = data.get("daily_activity", [])
+    failed_tasks = await tasks_collection.count_documents({
+        "user_telegram_id": telegram_id,
+        "status": "failed"
+    })
 
 
     return UserProfileResponse(
@@ -221,13 +174,16 @@ async def get_user_profile(
                 custom_cost=float(price.custom_cost)
             ) for price in custom_prices
         ],
-        total_spending=float(total_spending),
-        total_tasks=total_tasks,
-        failed_tasks=failed_tasks,
-        model_usage=model_usage,
-        daily_activity=daily_activity
-    )
 
+        total_spending=user_summary["total_spending"],
+        total_tasks=user_summary["total_tasks"],
+        model_usage=[schemas.UserStatItem(model=row.model_name, count=row.count) for row in
+                     user_summary["model_usage"]],
+
+
+        failed_tasks=failed_tasks,
+        daily_activity=[]
+    )
 
 @router.get("/{telegram_id}/prices", response_model=List[UserPriceResponse])
 async def get_user_custom_prices(

@@ -14,6 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from app.aws.aws_config import AWS_REGION
 from app.database.engine import async_session_factory
 from app.database.mongo_db import get_task_collection
+from app.database.repositories.analytics_repository import AnalyticsRepository
 from app.database.repositories.user_repository import ApiKeyRepository
 from app.services.providers import example_provider
 from app.settings import settings
@@ -41,7 +42,9 @@ async def process_task(session: aiohttp.ClientSession,
                        s3_client: aiobotocore.client.BaseClient,
                        task_data: dict,
                        tasks_collection: AsyncIOMotorCollection,
-                       key_repo: ApiKeyRepository):
+                       key_repo: ApiKeyRepository,
+                       analytics_repo: AnalyticsRepository
+                       ):
     task_id = task_data["_id"]
     logger.info(f"TaskID: {task_id} | Начинаю обработку.")
 
@@ -86,6 +89,23 @@ async def process_task(session: aiohttp.ClientSession,
         await tasks_collection.update_one({"_id": task_id}, {"$set": update_data})
         logger.info(f"TaskID: {task_id} | Задача успешно завершена.")
 
+
+        try:
+            created_time = datetime.fromisoformat(task_data["created_at"])
+            await analytics_repo.log_and_update_stats_on_completion(
+                task_id=task_data["_id"],
+                user_telegram_id=task_data["user_telegram_id"],
+                api_key_id=task_data["api_key_id"],
+                model_name=task_data["model"],
+                cost=task_data.get("cost", 0.0),
+                prime_cost=task_data.get("prime_cost", 0.0),
+                created_at=created_time
+            )
+            logger.info(f"TaskID: {task_id} | Аналитика сохранена.")
+
+        except Exception as analytics_e:
+            logger.error(f"TaskID: {task_id} | ОШИБКА ЗАПИСИ В АНАЛИТИКУ: {analytics_e}", exc_info=True)
+
     except Exception as e:
         logger.error(f"TaskID: {task_id} | Ошибка при обработке: {e}", exc_info=True)
         await tasks_collection.update_one({"_id": task_id}, {"$set": {"status": "failed", "error": str(e)}})
@@ -114,6 +134,7 @@ async def refund_on_failure(task: dict, key_repo: ApiKeyRepository):
 async def main():
     tasks_collection = get_task_collection()
     key_repo = ApiKeyRepository(async_session_factory)
+    analytics_repo = AnalyticsRepository(async_session_factory)
 
     logger.info(f"Воркер {WORKER_ID} запущен. Максимум одновременных задач: {MAX_CONCURRENT_TASKS}")
 
@@ -163,7 +184,8 @@ async def main():
                                 s3_client=s3_client,
                                 task_data=task_data,
                                 tasks_collection=tasks_collection,
-                                key_repo=key_repo
+                                key_repo=key_repo,
+                                analytics_repo=analytics_repo
                             )
 
                     except Exception as e:

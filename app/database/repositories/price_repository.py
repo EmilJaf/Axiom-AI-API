@@ -3,7 +3,6 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.database.main_models import Price
 
-
 class PriceRepository:
     def __init__(self, session_factory):
         self.session_factory = session_factory

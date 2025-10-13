@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from app import dependencies
 
-from app.routers.admin import keys, logs, prices, stats, tasks, workers, users
+from app.routers.admin import keys, logs, prices, stats, tasks, workers, users, analytics
 
 
 router = APIRouter(
@@ -18,3 +18,4 @@ router.include_router(logs.router)
 router.include_router(stats.router)
 router.include_router(tasks.router)
 router.include_router(workers.router)
+router.include_router(analytics.router)
