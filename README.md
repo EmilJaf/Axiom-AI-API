@@ -26,28 +26,37 @@ This project demonstrates the construction of a complex, asynchronous, and distr
 
 The project is built on a microservice-oriented architecture, where the API server (Producer) and task processors (Consumers/Workers) are decoupled for independent scaling and enhanced reliability.
 
-```
-                               +---------------------------+
-Clients (Bots, Apps) ---->     |   API Gateway (FastAPI)   | ---(Publish Task)---> [ Message Broker (RabbitMQ) ]
-                               +---------------------------+                           ^
-                                      |                                                |
-                                      | (User/Billing Data Read/Write)                 | (Consume Task)
-                                      v                                                |
-+--------------------------------------------------------------------------------------+-----------------+
-|                                                                                      |                 |
-|                               +-----------------+                                    |                 |
-+-----------------------------> |  SQL DB (MySQL) |                                    |                 v
-                                | (Users, Keys,   |                                    |      +--------------------+
-                                |   Billing)      | <----------------------------------+----> | Worker(s) (Asyncio)  | ----> External AI APIs
-                                +-----------------+                                          +--------------------+
-                                                                                                      |
-                                                                                                      | (Task Status/Result Read/Write)
-                                                                                                      v
-                                                                                                +----------------+
-                                                                                                | NoSQL DB       |
-                                                                                                | (MongoDB)      |
-                                                                                                | (Task Storage) |
-                                                                                                +----------------+
+```mermaid
+graph TD;
+    subgraph " "
+        direction LR
+        
+        subgraph "User's World"
+            A[Clients: Bots, Apps]
+        end
+
+        A -- "HTTPS Request" --> B;
+        
+        subgraph "Backend System"
+            B["API Gateway <br> (FastAPI)"];
+            C["Message Broker <br> (RabbitMQ)"];
+            D["Worker(s) <br> (Asyncio Consumers)"];
+            E["SQL DB <br> (MySQL)"];
+            F["NoSQL DB <br> (MongoDB)"];
+        end
+
+        B -- "Publish Task" --> C;
+        C -- "Consume Task" --> D;
+        B -.-> E;
+        D -.-> E;
+        D -.-> F;
+
+        subgraph "External World"
+            G[External AI APIs];
+        end
+
+        D -- "API Call" --> G;
+    end
 ```
 
 ## 🛠️ Tech Stack
