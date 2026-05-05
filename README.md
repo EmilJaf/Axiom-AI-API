@@ -76,7 +76,7 @@ To run this project locally, you will need Docker and Docker Compose installed.
 
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/EmilJaf/Axiom-AI-API.git](https://github.com/EmilJaf/Axiom-AI-API.git)
+git clone https://github.com/EmilJaf/Axiom-AI-API.git
 cd Axiom-AI-API
 ```
 
