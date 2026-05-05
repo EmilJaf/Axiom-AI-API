@@ -1,6 +1,6 @@
 # Axiom AI Gateway
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/your-repo/ci.yml?branch=main)](https://github.com/your-username/your-repo/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/EmilJaf/Axiom-AI-API/ci.yml?branch=main)](https://github.com/EmilJaf/Axiom-AI-API/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-311/)
 
@@ -76,8 +76,8 @@ To run this project locally, you will need Docker and Docker Compose installed.
 
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/your-username/your-repo.git](https://github.com/your-username/your-repo.git)
-cd your-repo
+git clone [https://github.com/EmilJaf/Axiom-AI-API.git](https://github.com/EmilJaf/Axiom-AI-API.git)
+cd Axiom-AI-API
 ```
 
 ### 2. Configure Environment Variables
